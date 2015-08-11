@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import argparse
 import json
 import sys
 import urllib2
@@ -7,44 +8,65 @@ import urllib2
 # Get all issues on a milestone
 sample_url = 'https://api.github.com/repos/GENI-NSF/geni-portal/issues?milestone=74&state=all'
 
-milestone='next-minor-release'
-owner='GENI-NSF'
-repo='geni-portal'
+#milestone='next-minor-release'
+#owner='GENI-NSF'
+#repo='geni-portal'
 base_url = 'https://api.github.com/repos'
 
-# Find the milestone
-url = '%s/%s/%s/milestones?state=all' % (base_url, owner, repo)
-response = urllib2.urlopen(url)
-raw = response.read()
-milestones = json.loads(raw)
-target_milestone = None
-for m in milestones:
-    title = m['title']
-    if title == milestone:
-        target_milestone = m
-        break
+def do_stuff(milestone, owner, repo):
+    # Find the milestone
+    url = '%s/%s/%s/milestones?state=all' % (base_url, owner, repo)
+    response = urllib2.urlopen(url)
+    raw = response.read()
+    milestones = json.loads(raw)
+    target_milestone = None
+    for m in milestones:
+        title = m['title']
+        if title == milestone:
+            target_milestone = m
+            break
 
-if not target_milestone:
-    print 'Milestone %s not found' % (milestone)
-    sys.exit(1)
+    if not target_milestone:
+        print 'Milestone %s not found' % (milestone)
+        sys.exit(1)
 
-ms_number = target_milestone['number']
-#print ms_number
+    ms_number = target_milestone['number']
+    #print ms_number
 
-issue_url = '%s/%s/%s/issues?milestone=%d&state=all' % (base_url, owner, repo, ms_number)
-response = urllib2.urlopen(issue_url)
-raw = response.read()
-issues = json.loads(raw)
+    issue_url = '%s/%s/%s/issues?milestone=%d&state=all' % (base_url, owner, repo, ms_number)
+    response = urllib2.urlopen(issue_url)
+    raw = response.read()
+    issues = json.loads(raw)
 
-# Print milestone header
-print milestone
-print '-' * len(milestone)
-print
+    # Print milestone header
+    print milestone
+    print '-' * len(milestone)
+    print
 
-# Print bullets for each issue and pull request
-for i in issues:
-    prefix = ''
-    if 'pull_request' in i:
-        prefix = 'PR '
-    print ' * %s (%s[#%d](%s))' % (i['title'], prefix, i['number'], i['html_url'])
-    #print i.keys()
+    # Print bullets for each issue and pull request
+    for i in issues:
+        prefix = ''
+        if 'pull_request' in i:
+            prefix = 'PR '
+        print ' * %s (%s[#%d](%s))' % (i['title'], prefix, i['number'], i['html_url'])
+        #print i.keys()
+
+def parse_args(args):
+    parser = argparse.ArgumentParser(description='Generate changes file.')
+    parser.add_argument('-m', '--milestone', metavar='MILESTONE',
+                       help='a milestone name')
+    parser.add_argument('-o', '--owner', metavar='OWNER',
+                       help='GitHub repository owner')
+    parser.add_argument('-r', '--repository', metavar='REPO',
+                       help='GitHub repository')
+    return parser.parse_args()
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
+    args = parse_args(argv)
+    print args
+    do_stuff(args.milestone, args.owner, args.repository)
+
+if __name__ == "__main__":
+    sys.exit(main())

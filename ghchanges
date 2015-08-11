@@ -1,0 +1,50 @@
+#!/usr/bin/env python
+
+import json
+import sys
+import urllib2
+
+# Get all issues on a milestone
+sample_url = 'https://api.github.com/repos/GENI-NSF/geni-portal/issues?milestone=74&state=all'
+
+milestone='next-minor-release'
+owner='GENI-NSF'
+repo='geni-portal'
+base_url = 'https://api.github.com/repos'
+
+# Find the milestone
+url = '%s/%s/%s/milestones?state=all' % (base_url, owner, repo)
+response = urllib2.urlopen(url)
+raw = response.read()
+milestones = json.loads(raw)
+target_milestone = None
+for m in milestones:
+    title = m['title']
+    if title == milestone:
+        target_milestone = m
+        break
+
+if not target_milestone:
+    print 'Milestone %s not found' % (milestone)
+    sys.exit(1)
+
+ms_number = target_milestone['number']
+#print ms_number
+
+issue_url = '%s/%s/%s/issues?milestone=%d&state=all' % (base_url, owner, repo, ms_number)
+response = urllib2.urlopen(issue_url)
+raw = response.read()
+issues = json.loads(raw)
+
+# Print milestone header
+print milestone
+print '-' * len(milestone)
+print
+
+# Print bullets for each issue and pull request
+for i in issues:
+    prefix = ''
+    if 'pull_request' in i:
+        prefix = 'PR '
+    print ' * %s (%s[#%d](%s))' % (i['title'], prefix, i['number'], i['html_url'])
+    #print i.keys()

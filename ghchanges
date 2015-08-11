@@ -13,6 +13,40 @@ sample_url = 'https://api.github.com/repos/GENI-NSF/geni-portal/issues?milestone
 #repo='geni-portal'
 base_url = 'https://api.github.com/repos'
 
+class Milestone(object):
+    def __init__(self, owner, repo, json_data):
+        self.data = json_data
+        self.owner = owner
+        self.repo = repo
+
+    @classmethod
+    def find(cls, name, owner, repo):
+        url = '%s/%s/%s/milestones?state=all' % (base_url, owner, repo)
+        response = urllib2.urlopen(url)
+        raw = response.read()
+        milestones = json.loads(raw)
+        found = None
+        for m in milestones:
+            title = m['title']
+            if title == name:
+                found = Milestone(owner, repo, m)
+                break
+        return found
+
+    @property
+    def number(self):
+        return self.data['number']
+
+    def issues(self):
+        ms_number = self.number
+        issue_url = '%s/%s/%s/issues?milestone=%d&state=all'
+        issue_url = issue_url % (base_url, self.owner, self.repo, ms_number)
+        response = urllib2.urlopen(issue_url)
+        raw = response.read()
+        issues = json.loads(raw)
+        return issues
+
+
 def do_stuff(milestone, owner, repo):
     # Find the milestone
     url = '%s/%s/%s/milestones?state=all' % (base_url, owner, repo)
@@ -66,7 +100,7 @@ def main(argv=None):
         argv = sys.argv
     args = parse_args(argv)
     print args
-    do_stuff(args.milestone, args.owner, args.repository)
+    #do_stuff(args.milestone, args.owner, args.repository)
 
 if __name__ == "__main__":
     sys.exit(main())

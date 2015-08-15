@@ -1,5 +1,13 @@
 #!/usr/bin/env python
 
+#----------------------------------------------------------------------
+# Print a CHANGES file in GitHub Flavored Markdown
+#
+# Sample call:
+#    ghchanges -m 3.2 -o GENI-NSF -r geni-portal > changes.md
+#
+#----------------------------------------------------------------------
+
 import argparse
 import json
 import sys
@@ -63,6 +71,10 @@ class Milestone(GitHubObject):
     def number(self):
         return self.data['number']
 
+    @property
+    def title(self):
+        return self.data['title']
+
     def issues(self):
         ms_number = self.number
         issue_url = '%s/%s/%s/issues?milestone=%d&state=all'
@@ -73,6 +85,31 @@ class Milestone(GitHubObject):
         return [Issue(self.owner, self.repo, json_data)
                 for json_data in issues]
 
+def print_header(hdr, level=1):
+    print '#' * level,
+    print hdr
+
+def print_changes_1(milestone, issues):
+    # print header
+    # print issues
+    # print pull requests
+    hdr = "Release %s" % (milestone.title)
+    print_header(hdr, 1)
+    print
+    print_header("Issues Closed", 2)
+    print
+    pull_requests = []
+    for i in issues:
+        if i.is_pull_request:
+            pull_requests.append(i)
+        else:
+            print "* %s" % (i.md_string())
+    print
+    print_header("Pull Requests Merged", 2)
+    print
+    for p in pull_requests:
+        print "* %s" % (p.md_string())
+
 def do_stuff(milestone, owner, repo):
     # Find the milestone
     m = Milestone.find(milestone, owner, repo)
@@ -80,6 +117,9 @@ def do_stuff(milestone, owner, repo):
     if not m:
         print 'Milestone %s not found' % (milestone)
         sys.exit(1)
+
+    print_changes_1(m, m.issues())
+    return
 
     issues = m.issues()
 
@@ -108,7 +148,9 @@ def main(argv=None):
     if argv is None:
         argv = sys.argv
     args = parse_args(argv)
-    print args
+    # Need to validate arguments or put good defaults in place
+    # Actually, since they are required, make them so in argparse
+    # by not making them "options".
     do_stuff(args.milestone, args.owner, args.repository)
 
 if __name__ == "__main__":

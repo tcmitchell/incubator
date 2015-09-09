@@ -10,7 +10,9 @@
 
 import argparse
 import json
+import re
 import sys
+import urllib
 import urllib2
 
 # Get all issues on a milestone
@@ -20,6 +22,62 @@ sample_url = 'https://api.github.com/repos/GENI-NSF/geni-portal/issues?milestone
 #owner='GENI-NSF'
 #repo='geni-portal'
 base_url = 'https://api.github.com/repos'
+
+class GitHubService(object):
+
+    base_url = 'https://api.github.com/repos'
+
+    def __init__(self):
+        pass
+
+    def get_next_link(self, response):
+        """Extract the link to the next set of issues.
+
+        The GitHub API returns 30 issues at a time. The response
+        headers include a link to the next 'page' of issues. Extract
+        it and return it. Return None if no next link is present.
+
+        The link header is a comma-separated list of links:
+
+            '<https://api.github.com/...>; rel="next", <URL>; rel="last"'
+        """
+        result = None
+        link_header = response.headers.getheader('link')
+        if link_header:
+            links = [l.strip() for l in link_header.split(',')]
+            p = re.compile('^<(.*)>; rel="(.*)"$')
+            for link in links:
+                m = p.match(link)
+                if m and m.group(2) == 'next':
+                    result = m.group(1)
+                    break
+        return result
+
+class GitHubMilestoneService(GitHubService):
+    def __init__(self):
+        pass
+
+    def get(self, owner, repo, milestone, **kwargs):
+        """Get all milestones matching parameters. Specify parameters
+        using arbitrary keyword arguments. For instance, state=all or
+        state=closed.
+        """
+        url = '%s/%s/%s/milestones' % (self.base_url, owner, repo)
+        if kwargs:
+            query_string = urllib.urlencode(kwargs)
+            url = url + '?' + query_string
+        while url:
+            print url
+            response = urllib2.urlopen(url)
+            url = self.get_next_link(response)
+            raw = response.read()
+            milestones = json.loads(raw)
+            found = None
+            for m in milestones:
+                title = m['title']
+                if title == milestone:
+                    found = Milestone(owner, repo, m)
+                    return found
 
 class GitHubObject(object):
     def __init__(self, owner, repo, json_data):
@@ -112,7 +170,9 @@ def print_changes_1(milestone, issues):
 
 def do_stuff(milestone, owner, repo):
     # Find the milestone
-    m = Milestone.find(milestone, owner, repo)
+    ghms = GitHubMilestoneService()
+    m = ghms.get(owner, repo, milestone, state='all')
+#    m = Milestone.find(milestone, owner, repo)
 
     if not m:
         print 'Milestone %s not found' % (milestone)

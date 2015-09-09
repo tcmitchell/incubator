@@ -79,6 +79,30 @@ class GitHubMilestoneService(GitHubService):
                     found = Milestone(owner, repo, m)
                     return found
 
+class GitHubIssueService(GitHubService):
+    def __init__(self):
+        pass
+
+    def get(self, owner, repo, milestone, **kwargs):
+        """Get all issues for the given milestone. Specify parameters
+        using arbitrary keyword arguments. For instance, state=all or
+        state=closed.
+        """
+        url = '%s/%s/%s/issues' % (self.base_url, owner, repo)
+        kwargs['milestone'] = milestone.number
+        query_string = urllib.urlencode(kwargs)
+        url = url + '?' + query_string
+        result = []
+        while url:
+            print url
+            response = urllib2.urlopen(url)
+            url = self.get_next_link(response)
+            raw = response.read()
+            issues = json.loads(raw)
+            result.extend([Issue(owner, repo, json_data)
+                           for json_data in issues])
+        return result
+
 class GitHubObject(object):
     def __init__(self, owner, repo, json_data):
         self.data = json_data
@@ -111,20 +135,6 @@ class Issue(GitHubObject):
 
 class Milestone(GitHubObject):
 
-    @classmethod
-    def find(cls, name, owner, repo):
-        url = '%s/%s/%s/milestones?state=all' % (base_url, owner, repo)
-        response = urllib2.urlopen(url)
-        raw = response.read()
-        milestones = json.loads(raw)
-        found = None
-        for m in milestones:
-            title = m['title']
-            if title == name:
-                found = Milestone(owner, repo, m)
-                break
-        return found
-
     @property
     def number(self):
         return self.data['number']
@@ -134,14 +144,8 @@ class Milestone(GitHubObject):
         return self.data['title']
 
     def issues(self):
-        ms_number = self.number
-        issue_url = '%s/%s/%s/issues?milestone=%d&state=all'
-        issue_url = issue_url % (base_url, self.owner, self.repo, ms_number)
-        response = urllib2.urlopen(issue_url)
-        raw = response.read()
-        issues = json.loads(raw)
-        return [Issue(self.owner, self.repo, json_data)
-                for json_data in issues]
+        ghis = GitHubIssueService()
+        return ghis.get(self.owner, self.repo, self, state='all')
 
 def print_header(hdr, level=1):
     print '#' * level,
@@ -172,7 +176,6 @@ def do_stuff(milestone, owner, repo):
     # Find the milestone
     ghms = GitHubMilestoneService()
     m = ghms.get(owner, repo, milestone, state='all')
-#    m = Milestone.find(milestone, owner, repo)
 
     if not m:
         print 'Milestone %s not found' % (milestone)

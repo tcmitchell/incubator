@@ -1,27 +1,22 @@
 #!/usr/bin/env python
 
-#----------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # Print a CHANGES file in GitHub Flavored Markdown
 #
 # Sample call:
 #    ghchanges -m 3.2 -o GENI-NSF -r geni-portal > changes.md
 #
-#----------------------------------------------------------------------
+# ---------------------------------------------------------------------
 
 import argparse
 import json
 import re
 import sys
+import time
 import urllib
 import urllib2
+from distutils.version import StrictVersion
 
-# Get all issues on a milestone
-sample_url = 'https://api.github.com/repos/GENI-NSF/geni-portal/issues?milestone=74&state=all'
-
-#milestone='next-minor-release'
-#owner='GENI-NSF'
-#repo='geni-portal'
-base_url = 'https://api.github.com/repos'
 
 class GitHubService(object):
 
@@ -53,6 +48,7 @@ class GitHubService(object):
                     break
         return result
 
+
 class GitHubMilestoneService(GitHubService):
     def __init__(self):
         pass
@@ -67,7 +63,6 @@ class GitHubMilestoneService(GitHubService):
             query_string = urllib.urlencode(kwargs)
             url = url + '?' + query_string
         while url:
-            print url
             response = urllib2.urlopen(url)
             url = self.get_next_link(response)
             raw = response.read()
@@ -78,6 +73,26 @@ class GitHubMilestoneService(GitHubService):
                 if title == milestone:
                     found = Milestone(owner, repo, m)
                     return found
+
+    def all(self, owner, repo, **kwargs):
+        """Get all milestones matching parameters. Specify parameters
+        using arbitrary keyword arguments. For instance, state=all or
+        state=closed.
+        """
+        url = '%s/%s/%s/milestones' % (self.base_url, owner, repo)
+        if kwargs:
+            query_string = urllib.urlencode(kwargs)
+            url = url + '?' + query_string
+        result = []
+        while url:
+            response = urllib2.urlopen(url)
+            url = self.get_next_link(response)
+            raw = response.read()
+            milestones = json.loads(raw)
+            result.extend([Milestone(owner, repo, m)
+                          for m in milestones])
+        return result
+
 
 class GitHubIssueService(GitHubService):
     def __init__(self):
@@ -94,7 +109,6 @@ class GitHubIssueService(GitHubService):
         url = url + '?' + query_string
         result = []
         while url:
-            print url
             response = urllib2.urlopen(url)
             url = self.get_next_link(response)
             raw = response.read()
@@ -103,11 +117,13 @@ class GitHubIssueService(GitHubService):
                            for json_data in issues])
         return result
 
+
 class GitHubObject(object):
     def __init__(self, owner, repo, json_data):
         self.data = json_data
         self.owner = owner
         self.repo = repo
+
 
 class Issue(GitHubObject):
     @property
@@ -133,6 +149,7 @@ class Issue(GitHubObject):
         format = '%s (%s[#%d](%s))'
         return format % (self.title, prefix, self.number, self.html_url)
 
+
 class Milestone(GitHubObject):
 
     @property
@@ -147,30 +164,47 @@ class Milestone(GitHubObject):
         ghis = GitHubIssueService()
         return ghis.get(self.owner, self.repo, self, state='all')
 
+    def __cmp__(self, other):
+        if hasattr(self, 'version') and hasattr(other, 'version'):
+            return self.version.__cmp__(other.version)
+        else:
+            return self.title.__cmp__(other.title)
+
+
 def print_header(hdr, level=1):
     print '#' * level,
     print hdr
 
-def print_changes_1(milestone, issues):
+
+def print_changes_1(milestone, all_issues):
     # print header
     # print issues
     # print pull requests
+    issues = []
+    pull_requests = []
+    for i in all_issues:
+        if i.is_pull_request:
+            pull_requests.append(i)
+        else:
+            issues.append(i)
+
     hdr = "Release %s" % (milestone.title)
     print_header(hdr, 1)
     print
     print_header("Issues Closed", 2)
     print
-    pull_requests = []
-    for i in issues:
-        if i.is_pull_request:
-            pull_requests.append(i)
-        else:
+    if issues:
+        for i in issues:
             print "* %s" % (i.md_string())
-    print
-    print_header("Pull Requests Merged", 2)
-    print
-    for p in pull_requests:
-        print "* %s" % (p.md_string())
+    else:
+        print "* None"
+    if pull_requests:
+        print
+        print_header("Pull Requests Merged", 2)
+        print
+        for p in pull_requests:
+            print "* %s" % (p.md_string())
+
 
 def do_stuff(milestone, owner, repo):
     # Find the milestone
@@ -197,15 +231,37 @@ def do_stuff(milestone, owner, repo):
             continue
         print ' * %s' % (i.md_string())
 
+
 def parse_args(args):
     parser = argparse.ArgumentParser(description='Generate changes file.')
     parser.add_argument('-m', '--milestone', metavar='MILESTONE',
-                       help='a milestone name')
+                        help='a milestone name')
     parser.add_argument('-o', '--owner', metavar='OWNER',
-                       help='GitHub repository owner')
+                        help='GitHub repository owner')
     parser.add_argument('-r', '--repository', metavar='REPO',
-                       help='GitHub repository')
+                        help='GitHub repository')
     return parser.parse_args()
+
+
+def sem_ver_filter(milestone):
+    try:
+        milestone.version = StrictVersion(milestone.title)
+        return True
+    except:
+        return False
+
+
+def full_changes(args):
+    ghms = GitHubMilestoneService()
+    milestones = ghms.all(args.owner, args.repository, state='closed')
+    milestones = [m for m in milestones if sem_ver_filter(m)]
+    milestones = sorted(milestones)
+    milestones.reverse()
+    for m in milestones:
+        print_changes_1(m, m.issues())
+        print ""
+        time.sleep(300)
+
 
 def main(argv=None):
     if argv is None:
@@ -214,7 +270,10 @@ def main(argv=None):
     # Need to validate arguments or put good defaults in place
     # Actually, since they are required, make them so in argparse
     # by not making them "options".
-    do_stuff(args.milestone, args.owner, args.repository)
+    if True:
+        do_stuff(args.milestone, args.owner, args.repository)
+    else:
+        full_changes(args)
 
 if __name__ == "__main__":
     sys.exit(main())

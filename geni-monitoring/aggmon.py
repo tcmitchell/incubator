@@ -2,6 +2,7 @@
 
 # Monitoring API: http://groups.geni.net/geni/wiki/GENIMonitoring/API
 
+import urllib
 import urllib2
 import json
 import datetime
@@ -12,6 +13,27 @@ BASE_URL = 'http://genimondev.uky.edu/API'
 INFO_URL = '%s/info/' % (BASE_URL)
 DATA_URL = '%s/data/' % (BASE_URL)
 
+class Aggregate(object):
+    """A representation of an aggregate from monitoring data"""
+    def __init__(self, data):
+        self.data = data
+
+    @property
+    def urn(self):
+        if 'urn' in self.data:
+            return self.data['urn']
+        else:
+            return None
+
+    @property
+    def id(self):
+        if 'id' in self.data:
+            return self.data['id']
+        else:
+            return None
+
+    
+    
 # TODO: Still need to HTTP encode the resulting query
 def buildMonQuery(**kwargs):
     return json.dumps(kwargs, separators=(',', ':'))
@@ -29,10 +51,12 @@ def getIsAvailableEvents(agg_list):
                           output='json',
                           ts={'gte':start_ts,
                               'lt':end_ts})
-    url = DATA_URL + '?q=' + query
-    print url
+    query = urllib.urlencode({'q': query})
+    url = DATA_URL + '?' + query
+    # print url
     f = urllib2.urlopen(url)
     all = f.read()
+    f.close()
     try:
         return json.loads(all)
     except:
@@ -44,34 +68,23 @@ url = INFO_URL + '?q={"obj":{"type":"aggregate"},"output":"json","infoType":"sim
 f = urllib2.urlopen(url)
 all = f.read()
 x = json.loads(all)
+f.close()
 
-def getMonVal(obj, field):
-    if field in obj:
-        return obj[field]
-    else:
-        return None
+all_aggs = [Aggregate(agg_data) for agg_data in x]
 
-def getMonTS(obj, field):
-    if field in obj:
-        return obj[field] / 1000
-    else:
-        return 0
+#print all_aggs
 
-for a in x:
-    agg_urn = getMonVal(a, "urn")
-    # Getting is_available events by URN does not appear to work
-    # by_urn = getIsAvailableEvents([agg_urn])
-    agg_id = getMonVal(a, "id")
-    by_id = getIsAvailableEvents([agg_id])
-    #print "By ID:"
-    #pprint.pprint(by_id)
+for a in all_aggs:
+    event_data = getIsAvailableEvents([a.urn])
+    # pprint.pprint(by_urn)
+
     # Data is wrapped in an extra list
-    by_id = by_id[0]
-    if not by_id:
-        print agg_urn
+    event_data = event_data[0]
+    print a.urn
+    if not event_data:
         print "\tNo Data"
         continue
-    agg_data = by_id[0]
+    agg_data = event_data[0]
     ts_data = agg_data['tsdata']
     #print ts_data
     available = False
@@ -80,46 +93,5 @@ for a in x:
         if ts['ts'] > available_ts:
             available_ts = ts['ts']
             available = ts['v']
-    print agg_urn
     pretty_time = time.strftime('%c', time.localtime(available_ts/1000))
     print "\t%s: %r" % (pretty_time, available)
-
-for a in x:
-    break
-    agg_id = getMonVal(a, "id")
-    agg_urn = getMonVal(a, "urn")
-    ts = getMonTS(a, "ts")
-    polled = getMonTS(a, "last_polled_by_collector")
-    mapped = getMonTS(a, "last_mapped_by_collector")
-    print "id: %s" % (agg_id)
-    print "\tts: %d" % (ts)
-    print "\tpolled: %d" % (polled)
-    print "\tmapped: %d" % (mapped)
-    print "\tpoll gap: %s" % (abs(ts - polled))
-    print "\tmapped gap: %s" % (abs(ts - mapped))
-
-
-# a = x[10]
-# print json.dumps(a, indent=4)
-
-# {
-#     "last_polled_by_collector": 1456335973000, 
-#     "selfRef": "https://www.geni.uchicago.edu:5001/info/aggregate/uchicago-ig", 
-#     "amtype": "instageni", 
-#     "urn": "urn:publicid:IDN+geni.uchicago.edu+authority+cm", 
-#     "amwikipage": "http://groups.geni.net/geni/wiki/GeniAggregate/ChicagoInstaGENI", 
-#     "measRef": "https://www.geni.uchicago.edu:5001/data/", 
-#     "ts": 1456335983000, 
-#     "schemaVersion": "http://www.gpolab.bbn.com/monitoring/schema/20140828/aggregate#", 
-#     "monitoringVersion": "v2.0", 
-#     "last_mapped_by_collector": 1456336101000, 
-#     "opsConfig": {
-#         "collector_internal_id": "2117c661-d7a3-41b4-9291-908eb5efb417", 
-#         "href": "https://opsconfigdatastore.gpolab.bbn.com/info/opsconfig/geni-prod", 
-#         "id": "geni-prod"
-#     }, 
-#     "collector_internal_id": "1877c03f-0965-4ff2-966a-d0d6d73f8bbc", 
-#     "stitching_am": true, 
-#     "id": "uchicago-ig", 
-#     "operationalStatus": "Development"
-# }

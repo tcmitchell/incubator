@@ -40,9 +40,10 @@ def buildMonQuery(**kwargs):
 
 def getIsAvailableEvents(agg_list):
     # http://genimondev.uky.edu/API/data/?q={"eventType":["is_available"],"obj":{"id":["max-ig"],"type":"aggregate"},"output":"xml","ts":{"gte":1456345005000,"lt":1456348605000}}
-    end = datetime.datetime.utcnow()
-    end = datetime.datetime.now()
-    start = end - datetime.timedelta(minutes=60)
+    # end = datetime.datetime.utcnow()
+    now = datetime.datetime.now()
+    end = now + datetime.timedelta(minutes=0)
+    start = end - datetime.timedelta(minutes=30)
     end_ts = int(time.mktime(end.timetuple()) * 1000)
     start_ts = int(time.mktime(start.timetuple()) * 1000)
     query = buildMonQuery(eventType=['is_available'],
@@ -80,9 +81,10 @@ for a in all_aggs:
 
     # Data is wrapped in an extra list
     event_data = event_data[0]
-    print a.urn
+    # print a.urn
     if not event_data:
-        print "\tNo Data"
+        # print "\tNo Data"
+        a.status = "down"
         continue
     agg_data = event_data[0]
     ts_data = agg_data['tsdata']
@@ -94,4 +96,10 @@ for a in all_aggs:
             available_ts = ts['ts']
             available = ts['v']
     pretty_time = time.strftime('%c', time.localtime(available_ts/1000))
-    print "\t%s: %r" % (pretty_time, available)
+    # print "\t%s: %r" % (pretty_time, available)
+    a.status = (available and "up") or "down"
+
+updown_status = {}
+for a in all_aggs:
+    updown_status[a.urn] = a.status
+print json.dumps(updown_status, indent=2, sort_keys=True)

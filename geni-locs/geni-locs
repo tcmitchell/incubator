@@ -1,0 +1,34 @@
+#!/usr/bin/env python
+
+# ----------------------------------------------------------------------
+# Parse the GENI Portal map data and print a comma separated values
+# (CSV) file containing unique entries. The output format is aggregate
+# name, longitude, latitude. The resulting file can be loaded into
+# Microsoft Excel.
+# ----------------------------------------------------------------------
+
+import urllib2
+import json
+
+MAP_DATA = 'https://portal.geni.net/common/map/current.json'
+
+url = MAP_DATA
+f = urllib2.urlopen(url)
+all = f.read()
+f.close()
+jdat = json.loads(all)
+
+feat = jdat['features']
+
+rows = set()
+for x in feat:
+    loc = x['geometry']['coordinates']
+    lon = loc[0]
+    lat = loc[1]
+    props = x['properties']
+    name = props['am']
+    rows.add("%s, %s, %s" % (name, lon, lat))
+
+print("Name, Longitude, Latitude")
+for r in rows:
+    print r

@@ -1,0 +1,12 @@
+#--------------------------------------------------
+# Just a simple playbook
+#
+# Run locally with:
+#    ansible-playbook -i "localhost," -c local alpha.yml
+#--------------------------------------------------
+
+---
+- hosts: all
+  tasks:
+  - name: install python
+    package: name=python state=latest
